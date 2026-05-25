@@ -2,16 +2,21 @@
 #include "GameFramework/SpringArmComponent.h"
 #include "Camera/CameraComponent.h"
 #include "Components/StaticMeshComponent.h"
+#include "Components/BoxComponent.h"
+#include "GameFramework/PlayerController.h"
 
 ADroneActor::ADroneActor()
 {
     PrimaryActorTick.bCanEverTick = true;
+	AutoPossessPlayer = EAutoReceiveInput::Player0;
 
     // 물리 루트 컴포넌트 (Chaos Physics 적용 대상)
-    PhysicsRoot = CreateDefaultSubobject<UStaticMeshComponent>(TEXT("PhysicsRoot"));
+	PhysicsRoot = CreateDefaultSubobject<UBoxComponent>(TEXT("PhysicsRoot"));
     SetRootComponent(PhysicsRoot);
     PhysicsRoot->SetSimulatePhysics(true);
     PhysicsRoot->SetEnableGravity(true);
+	PhysicsRoot->SetBoxExtent(FVector(50.f, 50.f, 20.f)); // 이 줄 추가
+
 
     // 드론 본체 메시 (PhysicsRoot에 부착)
     DroneMesh = CreateDefaultSubobject<UStaticMeshComponent>(TEXT("DroneMesh"));
@@ -35,11 +40,20 @@ ADroneActor::ADroneActor()
     FPVCamera->SetupAttachment(PhysicsRoot);
     FPVCamera->SetRelativeLocation(FVector(20.f, 0.f, 0.f));
     FPVCamera->SetActive(false);
+
+
 }
 
 void ADroneActor::BeginPlay()
 {
     Super::BeginPlay();
+
+	//auto possess player 0
+	APlayerController* PC = GetWorld()->GetFirstPlayerController();
+    if (PC)
+    {
+        PC->Possess(this);
+    }
 }
 
 void ADroneActor::Tick(float DeltaTime)

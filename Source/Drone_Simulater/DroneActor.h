@@ -1,8 +1,9 @@
 #pragma once
-
 #include "CoreMinimal.h"
 #include "GameFramework/Pawn.h"
+#include "Components/BoxComponent.h"
 #include "DroneActor.generated.h"
+
 
 UCLASS()
 class DRONE_SIMULATER_API ADroneActor : public APawn
@@ -25,7 +26,7 @@ public:
 
     // 물리 시뮬레이션용 (Chaos Physics)
     UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Drone|Physics")
-    class UStaticMeshComponent* PhysicsRoot;
+    class UBoxComponent* PhysicsRoot;
 
     // 3인칭 카메라용 스프링암
     UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Drone|Camera")
