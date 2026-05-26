@@ -2,6 +2,7 @@
 #include "CoreMinimal.h"
 #include "GameFramework/Pawn.h"
 #include "Components/BoxComponent.h"
+#include "InputActionValue.h"
 #include "DroneActor.generated.h"
 
 
@@ -43,6 +44,29 @@ public:
     // 카메라 전환 함수
     UFUNCTION(BlueprintCallable, Category = "Drone|Camera")
     void ToggleCamera();
+
+    // Input Mapping Context
+    UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Drone|Input")
+    class UInputMappingContext* DroneInputMappingContext;
+
+    // Input Actions
+    UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Drone|Input")
+    class UInputAction* IA_Throttle;
+
+    UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Drone|Input")
+    class UInputAction* IA_Pitch;
+
+    UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Drone|Input")
+    class UInputAction* IA_Roll;
+
+    UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Drone|Input")
+    class UInputAction* IA_Yaw;
+
+    // 입력 처리 함수
+    void HandleThrottle(const FInputActionValue& Value);
+    void HandlePitch(const FInputActionValue& Value);
+    void HandleRoll(const FInputActionValue& Value);
+    void HandleYaw(const FInputActionValue& Value);
 
 private:
     bool bIsFPV = false;

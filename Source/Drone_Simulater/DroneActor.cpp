@@ -3,6 +3,8 @@
 #include "Camera/CameraComponent.h"
 #include "Components/StaticMeshComponent.h"
 #include "Components/BoxComponent.h"
+#include "EnhancedInputComponent.h"
+#include "EnhancedInputSubsystems.h"
 #include "GameFramework/PlayerController.h"
 
 ADroneActor::ADroneActor()
@@ -15,8 +17,9 @@ ADroneActor::ADroneActor()
     SetRootComponent(PhysicsRoot);
     PhysicsRoot->SetSimulatePhysics(true);
     PhysicsRoot->SetEnableGravity(true);
-	PhysicsRoot->SetBoxExtent(FVector(50.f, 50.f, 20.f)); // 이 줄 추가
-
+	PhysicsRoot->SetBoxExtent(FVector(50.f, 50.f, 20.f));
+    PhysicsRoot->SetCollisionEnabled(ECollisionEnabled::QueryAndPhysics);
+    PhysicsRoot->SetCollisionProfileName(TEXT("BlockAll"));
 
     // 드론 본체 메시 (PhysicsRoot에 부착)
     DroneMesh = CreateDefaultSubobject<UStaticMeshComponent>(TEXT("DroneMesh"));
@@ -48,11 +51,15 @@ void ADroneActor::BeginPlay()
 {
     Super::BeginPlay();
 
-	//auto possess player 0
-	APlayerController* PC = GetWorld()->GetFirstPlayerController();
-    if (PC)
+    PhysicsRoot->SetMassOverrideInKg(NAME_None, 1.5f, true);
+
+    if (APlayerController* PC = Cast<APlayerController>(GetController()))
     {
-        PC->Possess(this);
+        if (UEnhancedInputLocalPlayerSubsystem* Subsystem =
+            ULocalPlayer::GetSubsystem<UEnhancedInputLocalPlayerSubsystem>(PC->GetLocalPlayer()))
+        {
+            Subsystem->AddMappingContext(DroneInputMappingContext, 0);
+        }
     }
 }
 
@@ -64,6 +71,38 @@ void ADroneActor::Tick(float DeltaTime)
 void ADroneActor::SetupPlayerInputComponent(UInputComponent* PlayerInputComponent)
 {
     Super::SetupPlayerInputComponent(PlayerInputComponent);
+
+    if (UEnhancedInputComponent* EIC = Cast<UEnhancedInputComponent>(PlayerInputComponent))
+    {
+        EIC->BindAction(IA_Throttle, ETriggerEvent::Triggered, this, &ADroneActor::HandleThrottle);
+        EIC->BindAction(IA_Pitch,    ETriggerEvent::Triggered, this, &ADroneActor::HandlePitch);
+        EIC->BindAction(IA_Roll,     ETriggerEvent::Triggered, this, &ADroneActor::HandleRoll);
+        EIC->BindAction(IA_Yaw,      ETriggerEvent::Triggered, this, &ADroneActor::HandleYaw);
+    }
+}
+
+void ADroneActor::HandleThrottle(const FInputActionValue& Value)
+{
+    float Axis = Value.Get<float>();
+    PhysicsRoot->AddForce(FVector(0.f, 0.f, Axis * 10000.f));
+}
+
+void ADroneActor::HandlePitch(const FInputActionValue& Value)
+{
+    float Axis = Value.Get<float>();
+    PhysicsRoot->AddTorqueInDegrees(FVector(0.f, Axis * 50000.f, 0.f));
+}
+
+void ADroneActor::HandleRoll(const FInputActionValue& Value)
+{
+    float Axis = Value.Get<float>();
+    PhysicsRoot->AddTorqueInDegrees(FVector(Axis * 50000.f, 0.f, 0.f));
+}
+
+void ADroneActor::HandleYaw(const FInputActionValue& Value)
+{
+    float Axis = Value.Get<float>();
+    PhysicsRoot->AddTorqueInDegrees(FVector(0.f, 0.f, Axis * 50000.f));
 }
 
 void ADroneActor::ToggleCamera()
