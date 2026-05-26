@@ -87,7 +87,8 @@ void ADroneActor::SetupPlayerInputComponent(UInputComponent* PlayerInputComponen
 void ADroneActor::HandleThrottle(const FInputActionValue& Value)
 {
     float Axis = Value.Get<float>();
-    PhysicsRoot->AddForce(FVector(0.f, 0.f, Axis * 10000.f));
+    FVector UpVector = PhysicsRoot->GetUpVector();
+    PhysicsRoot->AddForce(UpVector * Axis * 10000.f);
 }
 
 void ADroneActor::HandlePitch(const FInputActionValue& Value)
@@ -101,7 +102,7 @@ void ADroneActor::HandleRoll(const FInputActionValue& Value)
 {
     float Axis = Value.Get<float>();
     //GEngine->AddOnScreenDebugMessage(-1, 1.f, FColor::Green, FString::Printf(TEXT("Roll Input: %f"), Axis));
-    PhysicsRoot->AddTorqueInDegrees(FVector(Axis * -1000000.f, 0.f, 0.f));
+    PhysicsRoot->AddTorqueInDegrees(FVector(Axis * 1000000.f, 0.f, 0.f));
 }
 
 void ADroneActor::HandleYaw(const FInputActionValue& Value)
