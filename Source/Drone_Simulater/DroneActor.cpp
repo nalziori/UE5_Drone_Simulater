@@ -10,14 +10,14 @@
 ADroneActor::ADroneActor()
 {
     PrimaryActorTick.bCanEverTick = true;
-	AutoPossessPlayer = EAutoReceiveInput::Player0;
+    AutoPossessPlayer = EAutoReceiveInput::Player0;
 
-    // 물리 루트 컴포넌트 (Chaos Physics 적용 대상)
-	PhysicsRoot = CreateDefaultSubobject<UBoxComponent>(TEXT("PhysicsRoot"));
+    // PhysicsRoot 먼저 생성
+    PhysicsRoot = CreateDefaultSubobject<UBoxComponent>(TEXT("PhysicsRoot"));
     SetRootComponent(PhysicsRoot);
     PhysicsRoot->SetSimulatePhysics(true);
     PhysicsRoot->SetEnableGravity(true);
-	PhysicsRoot->SetBoxExtent(FVector(50.f, 50.f, 20.f));
+    PhysicsRoot->SetBoxExtent(FVector(50.f, 50.f, 20.f));
     PhysicsRoot->SetCollisionEnabled(ECollisionEnabled::QueryAndPhysics);
     PhysicsRoot->SetCollisionProfileName(TEXT("BlockAll"));
 
@@ -25,8 +25,10 @@ ADroneActor::ADroneActor()
     DroneMesh = CreateDefaultSubobject<UStaticMeshComponent>(TEXT("DroneMesh"));
     DroneMesh->SetupAttachment(PhysicsRoot);
     DroneMesh->SetSimulatePhysics(false);
+    DroneMesh->SetRelativeLocation(FVector(0.f, 0.f, 0.f));
+    DroneMesh->SetRelativeRotation(FRotator(0.f, 0.f, 0.f));
 
-    // 스프링암 (3인칭 카메라 거리 조절)
+    // 스프링암
     SpringArm = CreateDefaultSubobject<USpringArmComponent>(TEXT("SpringArm"));
     SpringArm->SetupAttachment(PhysicsRoot);
     SpringArm->TargetArmLength = 300.f;
@@ -38,13 +40,11 @@ ADroneActor::ADroneActor()
     ThirdPersonCamera->SetupAttachment(SpringArm);
     ThirdPersonCamera->SetActive(true);
 
-    // FPV 카메라 (드론 앞쪽에 부착)
+    // FPV 카메라
     FPVCamera = CreateDefaultSubobject<UCameraComponent>(TEXT("FPVCamera"));
     FPVCamera->SetupAttachment(PhysicsRoot);
     FPVCamera->SetRelativeLocation(FVector(20.f, 0.f, 0.f));
     FPVCamera->SetActive(false);
-
-
 }
 
 void ADroneActor::BeginPlay()
@@ -52,6 +52,9 @@ void ADroneActor::BeginPlay()
     Super::BeginPlay();
 
     PhysicsRoot->SetMassOverrideInKg(NAME_None, 1.5f, true);
+    PhysicsRoot->SetCenterOfMass(FVector(0.f, 0.f, 0.f));
+    PhysicsRoot->SetLinearDamping(0.5f);
+    PhysicsRoot->SetAngularDamping(2.0f);
 
     if (APlayerController* PC = Cast<APlayerController>(GetController()))
     {
@@ -90,19 +93,22 @@ void ADroneActor::HandleThrottle(const FInputActionValue& Value)
 void ADroneActor::HandlePitch(const FInputActionValue& Value)
 {
     float Axis = Value.Get<float>();
-    PhysicsRoot->AddTorqueInDegrees(FVector(0.f, Axis * 50000.f, 0.f));
+    //GEngine->AddOnScreenDebugMessage(-1, 1.f, FColor::Red, FString::Printf(TEXT("Pitch Input: %f"), Axis));
+    PhysicsRoot->AddTorqueInDegrees(FVector(0.f, Axis * 1000000.f, 0.f));
 }
 
 void ADroneActor::HandleRoll(const FInputActionValue& Value)
 {
     float Axis = Value.Get<float>();
-    PhysicsRoot->AddTorqueInDegrees(FVector(Axis * 50000.f, 0.f, 0.f));
+    //GEngine->AddOnScreenDebugMessage(-1, 1.f, FColor::Green, FString::Printf(TEXT("Roll Input: %f"), Axis));
+    PhysicsRoot->AddTorqueInDegrees(FVector(Axis * -1000000.f, 0.f, 0.f));
 }
 
 void ADroneActor::HandleYaw(const FInputActionValue& Value)
 {
     float Axis = Value.Get<float>();
-    PhysicsRoot->AddTorqueInDegrees(FVector(0.f, 0.f, Axis * 50000.f));
+    //GEngine->AddOnScreenDebugMessage(-1, 1.f, FColor::Blue, FString::Printf(TEXT("Yaw Input: %f"), Axis));
+    PhysicsRoot->AddTorqueInRadians(FVector(0.f, 0.f, Axis * 10000.f));
 }
 
 void ADroneActor::ToggleCamera()
