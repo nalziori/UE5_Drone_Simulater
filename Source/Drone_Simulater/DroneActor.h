@@ -5,6 +5,32 @@
 #include "InputActionValue.h"
 #include "DroneActor.generated.h"
 
+USTRUCT()
+struct FPIDController
+{
+    GENERATED_BODY()
+
+    UPROPERTY(EditAnywhere) float Kp = 5.0f;
+    UPROPERTY(EditAnywhere) float Ki = 0.1f;
+    UPROPERTY(EditAnywhere) float Kd = 2.0f;
+
+    float Integral = 0.f;
+    float PrevError = 0.f;
+
+    float Update(float Error, float DeltaTime)
+    {
+        Integral += Error * DeltaTime;
+        float Derivative = (Error - PrevError) / DeltaTime;
+        PrevError = Error;
+        return Kp * Error + Ki * Integral + Kd * Derivative;
+    }
+
+    void Reset()
+    {
+        Integral = 0.f;
+        PrevError = 0.f;
+    }
+};
 
 UCLASS()
 class DRONE_SIMULATER_API ADroneActor : public APawn
@@ -21,35 +47,27 @@ public:
     virtual void Tick(float DeltaTime) override;
     virtual void SetupPlayerInputComponent(class UInputComponent* PlayerInputComponent) override;
 
-    // 드론 본체 메시
     UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Drone|Mesh")
     class UStaticMeshComponent* DroneMesh;
 
-    // 물리 시뮬레이션용 (Chaos Physics)
     UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Drone|Physics")
     class UBoxComponent* PhysicsRoot;
 
-    // 3인칭 카메라용 스프링암
     UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Drone|Camera")
     class USpringArmComponent* SpringArm;
 
-    // 3인칭 카메라
     UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Drone|Camera")
     class UCameraComponent* ThirdPersonCamera;
 
-    // FPV 카메라
     UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Drone|Camera")
     class UCameraComponent* FPVCamera;
 
-    // 카메라 전환 함수
     UFUNCTION(BlueprintCallable, Category = "Drone|Camera")
-    void ToggleCamera();
+    void ToggleCamera(const FInputActionValue& Value);
 
-    // Input Mapping Context
     UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Drone|Input")
     class UInputMappingContext* DroneInputMappingContext;
 
-    // Input Actions
     UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Drone|Input")
     class UInputAction* IA_Throttle;
 
@@ -62,12 +80,29 @@ public:
     UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Drone|Input")
     class UInputAction* IA_Yaw;
 
-    // 입력 처리 함수
+    UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Drone|Input")
+    class UInputAction* IA_Hover;
+
+    UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Drone|Input")
+    class UInputAction* IA_CameraToggle;
+
     void HandleThrottle(const FInputActionValue& Value);
     void HandlePitch(const FInputActionValue& Value);
     void HandleRoll(const FInputActionValue& Value);
     void HandleYaw(const FInputActionValue& Value);
+    void HandleHover(const FInputActionValue& Value);
+    void ResetPitch(const FInputActionValue& Value);
+    void ResetRoll(const FInputActionValue& Value);
 
 private:
     bool bIsFPV = false;
+    bool bHoverMode = false;
+    float TargetAltitude = 0.f;
+
+    FPIDController PitchPID;
+    FPIDController RollPID;
+    FPIDController AltitudePID;
+
+    float InputPitchAxis = 0.f;
+    float InputRollAxis  = 0.f;
 };
