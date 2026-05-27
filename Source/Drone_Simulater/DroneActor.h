@@ -3,6 +3,7 @@
 #include "GameFramework/Pawn.h"
 #include "Components/BoxComponent.h"
 #include "InputActionValue.h"
+#include "Blueprint/UserWidget.h"
 #include "DroneActor.generated.h"
 
 USTRUCT()
@@ -85,6 +86,12 @@ public:
 
     UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Drone|Input")
     class UInputAction* IA_CameraToggle;
+
+    UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Drone|HUD")
+    TSubclassOf<UUserWidget> HUDWidgetClass;
+
+    UPROPERTY()
+    UUserWidget* HUDWidget;
 
     void HandleThrottle(const FInputActionValue& Value);
     void HandlePitch(const FInputActionValue& Value);

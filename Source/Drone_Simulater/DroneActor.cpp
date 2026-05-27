@@ -5,6 +5,7 @@
 #include "Components/BoxComponent.h"
 #include "EnhancedInputComponent.h"
 #include "EnhancedInputSubsystems.h"
+#include "Components/TextBlock.h"
 #include "GameFramework/PlayerController.h"
 
 ADroneActor::ADroneActor()
@@ -63,6 +64,15 @@ void ADroneActor::BeginPlay()
             Subsystem->AddMappingContext(DroneInputMappingContext, 0);
         }
     }
+
+    if (HUDWidgetClass)
+    {
+        HUDWidget = CreateWidget<UUserWidget>(GetWorld(), HUDWidgetClass);
+        if (HUDWidget)
+        {
+            HUDWidget->AddToViewport();
+        }
+    }
 }
 
 void ADroneActor::Tick(float DeltaTime)
@@ -100,6 +110,26 @@ void ADroneActor::Tick(float DeltaTime)
         float AltitudeError = TargetAltitude - CurrentAltitude;
         float AltitudeCorrection = AltitudePID.Update(AltitudeError, DeltaTime);
         PhysicsRoot->AddForce(FVector(0.f, 0.f, AltitudeCorrection * 100.f));
+    }
+
+    if (HUDWidget)
+    {
+        
+        float Altitude = GetActorLocation().Z / 100.f; // cm → m
+        UTextBlock* AltitudeText = Cast<UTextBlock>(HUDWidget->GetWidgetFromName(TEXT("Text_Altitude")));
+        if (AltitudeText)
+            AltitudeText->SetText(FText::FromString(FString::Printf(TEXT("고도: %.1fm"), Altitude)));
+
+        
+        float Speed = PhysicsRoot->GetPhysicsLinearVelocity().Size() / 100.f; // cm/s → m/s
+        UTextBlock* SpeedText = Cast<UTextBlock>(HUDWidget->GetWidgetFromName(TEXT("Text_Speed")));
+        if (SpeedText)
+            SpeedText->SetText(FText::FromString(FString::Printf(TEXT("속도: %.1fm/s"), Speed)));
+
+        
+        UTextBlock* HoverText = Cast<UTextBlock>(HUDWidget->GetWidgetFromName(TEXT("Text_HoverMode")));
+        if (HoverText)
+            HoverText->SetText(FText::FromString(bHoverMode ? TEXT("호버: ON") : TEXT("호버: OFF")));
     }
 }
 
