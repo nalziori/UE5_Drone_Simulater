@@ -92,7 +92,14 @@ void ADroneActor::Tick(float DeltaTime)
         float PitchCorrection = PitchPID.Update(PitchError, DeltaTime);
         float RollCorrection  = RollPID.Update(RollError, DeltaTime);
 
-        PhysicsRoot->AddTorqueInDegrees(FVector(-RollCorrection * 5000.f, -PitchCorrection * 5000.f, 0.f));
+        FVector LocalTorque = PhysicsRoot->GetComponentTransform().TransformVector(
+            FVector(-RollCorrection * 5000.f, -PitchCorrection * 5000.f, 0.f));
+        PhysicsRoot->AddTorqueInDegrees(LocalTorque);
+
+        // PhysicsRoot->AddTorqueInDegrees(
+        //     FVector(-RollCorrection * 5000.f, -PitchCorrection * 5000.f, 0.f),
+        //     NAME_None, 
+        //     false);
     }
     else
     {
