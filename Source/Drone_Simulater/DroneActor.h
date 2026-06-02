@@ -93,6 +93,57 @@ public:
     UPROPERTY()
     UUserWidget* HUDWidget;
 
+    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="Drone|Rotor")
+    USceneComponent* RotorPivot1;
+
+    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="Drone|Rotor")
+    USceneComponent* RotorPivot2;
+
+    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="Drone|Rotor")
+    USceneComponent* RotorPivot3;
+
+    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="Drone|Rotor")
+    USceneComponent* RotorPivot4;
+
+    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Drone|Rotor")
+    class UStaticMeshComponent* Rotor1;
+
+    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Drone|Rotor")
+    class UStaticMeshComponent* Rotor2;
+
+    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Drone|Rotor")
+    class UStaticMeshComponent* Rotor3;
+
+    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Drone|Rotor")
+    class UStaticMeshComponent* Rotor4;
+
+    UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Drone|Rotor")
+    float RotorSpeed = 100.f;
+
+    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Drone|Rotor")
+    class UStaticMeshComponent* RotorShaft1; 
+
+    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Drone|Rotor")
+    class UStaticMeshComponent* RotorShaft2; 
+
+    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Drone|Rotor")
+    class UStaticMeshComponent* RotorShaft3; 
+
+    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Drone|Rotor")
+    class UStaticMeshComponent* RotorShaft4;
+
+    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Drone|Rotor")
+    class UStaticMeshComponent* RotorRing1;
+
+    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Drone|Rotor")
+    class UStaticMeshComponent* RotorRing2;
+
+    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Drone|Rotor")
+    class UStaticMeshComponent* RotorRing3;
+
+    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Drone|Rotor")
+    class UStaticMeshComponent* RotorRing4;
+
     void HandleThrottle(const FInputActionValue& Value);
     void HandlePitch(const FInputActionValue& Value);
     void HandleRoll(const FInputActionValue& Value);
@@ -112,4 +163,6 @@ private:
 
     float InputPitchAxis = 0.f;
     float InputRollAxis  = 0.f;
+
+    float RotorAngle = 0.f;
 };
