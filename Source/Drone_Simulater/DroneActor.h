@@ -93,41 +93,42 @@ public:
     UPROPERTY()
     UUserWidget* HUDWidget;
 
-    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="Drone|Rotor")
+    // Rotor structure:
+    // RotorPivotN is the propeller spin axis and should be placed at the real mount point.
+    // RotorN is attached to RotorPivotN and rotates around the local Z axis.
+    // RotorShaftN and RotorRingN are fixed visual parts and must not rotate.
+    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Drone|Rotor")
     USceneComponent* RotorPivot1;
 
-    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="Drone|Rotor")
+    UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Drone|Rotor")
+    FVector RotorPivotOffset1 = FVector::ZeroVector;
+
+    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Drone|Rotor")
     USceneComponent* RotorPivot2;
 
-    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="Drone|Rotor")
+    UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Drone|Rotor")
+    FVector RotorPivotOffset2 = FVector::ZeroVector;
+
+    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Drone|Rotor")
     USceneComponent* RotorPivot3;
 
-    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="Drone|Rotor")
+    UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Drone|Rotor")
+    FVector RotorPivotOffset3 = FVector::ZeroVector;
+
+    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Drone|Rotor")
     USceneComponent* RotorPivot4;
 
-    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Drone|Rotor")
-    class UStaticMeshComponent* Rotor1;
-
-    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Drone|Rotor")
-    class UStaticMeshComponent* Rotor2;
-
-    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Drone|Rotor")
-    class UStaticMeshComponent* Rotor3;
-
-    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Drone|Rotor")
-    class UStaticMeshComponent* Rotor4;
-
     UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Drone|Rotor")
-    float RotorSpeed = 100.f;
+    FVector RotorPivotOffset4 = FVector::ZeroVector;
 
     UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Drone|Rotor")
-    class UStaticMeshComponent* RotorShaft1; 
+    class UStaticMeshComponent* RotorShaft1;
 
     UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Drone|Rotor")
-    class UStaticMeshComponent* RotorShaft2; 
+    class UStaticMeshComponent* RotorShaft2;
 
     UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Drone|Rotor")
-    class UStaticMeshComponent* RotorShaft3; 
+    class UStaticMeshComponent* RotorShaft3;
 
     UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Drone|Rotor")
     class UStaticMeshComponent* RotorShaft4;
@@ -143,6 +144,21 @@ public:
 
     UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Drone|Rotor")
     class UStaticMeshComponent* RotorRing4;
+
+    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Drone|Rotor")
+    class UStaticMeshComponent* Rotor1;
+
+    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Drone|Rotor")
+    class UStaticMeshComponent* Rotor2;
+
+    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Drone|Rotor")
+    class UStaticMeshComponent* Rotor3;
+
+    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Drone|Rotor")
+    class UStaticMeshComponent* Rotor4;
+
+    UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Drone|Rotor")
+    float RotorSpeed = 100.f;
 
     void HandleThrottle(const FInputActionValue& Value);
     void HandlePitch(const FInputActionValue& Value);

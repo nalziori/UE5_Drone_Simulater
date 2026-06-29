@@ -24,69 +24,62 @@ ADroneActor::ADroneActor()
     DroneMesh = CreateDefaultSubobject<UStaticMeshComponent>(TEXT("DroneMesh"));
     DroneMesh->SetupAttachment(PhysicsRoot);
     DroneMesh->SetSimulatePhysics(false);
-    DroneMesh->SetRelativeLocation(FVector(0.f, 0.f, 0.f));
-    DroneMesh->SetRelativeRotation(FRotator(0.f, 0.f, 0.f));
-
+ 
+    // Rotor layout:
+    // - RotorPivotN is the spin axis and must be placed at the propeller center.
+    // - RotorN is the only child of RotorPivotN, so only the propeller rotates.
+    // - RotorRingN and RotorShaftN are fixed visual parts attached to DroneMesh.
     RotorPivot1 = CreateDefaultSubobject<USceneComponent>(TEXT("RotorPivot1"));
     RotorPivot1->SetupAttachment(DroneMesh);
+    RotorPivot1->SetRelativeLocation(RotorPivotOffset1);
+    Rotor1 = CreateDefaultSubobject<UStaticMeshComponent>(TEXT("Rotor1"));
+    Rotor1->SetupAttachment(RotorPivot1);
+    Rotor1->SetSimulatePhysics(false);
+    RotorShaft1 = CreateDefaultSubobject<UStaticMeshComponent>(TEXT("RotorShaft1"));
+    RotorShaft1->SetupAttachment(DroneMesh);
+    RotorShaft1->SetSimulatePhysics(false);
+    RotorRing1 = CreateDefaultSubobject<UStaticMeshComponent>(TEXT("RotorRing1"));
+    RotorRing1->SetupAttachment(DroneMesh);
+    RotorRing1->SetSimulatePhysics(false);
 
     RotorPivot2 = CreateDefaultSubobject<USceneComponent>(TEXT("RotorPivot2"));
     RotorPivot2->SetupAttachment(DroneMesh);
+    RotorPivot2->SetRelativeLocation(RotorPivotOffset2);
+    Rotor2 = CreateDefaultSubobject<UStaticMeshComponent>(TEXT("Rotor2"));
+    Rotor2->SetupAttachment(RotorPivot2);
+    Rotor2->SetSimulatePhysics(false);
+    RotorShaft2 = CreateDefaultSubobject<UStaticMeshComponent>(TEXT("RotorShaft2"));
+    RotorShaft2->SetupAttachment(DroneMesh);
+    RotorShaft2->SetSimulatePhysics(false);
+    RotorRing2 = CreateDefaultSubobject<UStaticMeshComponent>(TEXT("RotorRing2"));
+    RotorRing2->SetupAttachment(DroneMesh);
+    RotorRing2->SetSimulatePhysics(false);
 
     RotorPivot3 = CreateDefaultSubobject<USceneComponent>(TEXT("RotorPivot3"));
     RotorPivot3->SetupAttachment(DroneMesh);
+    RotorPivot3->SetRelativeLocation(RotorPivotOffset3);
+    Rotor3 = CreateDefaultSubobject<UStaticMeshComponent>(TEXT("Rotor3"));
+    Rotor3->SetupAttachment(RotorPivot3);
+    Rotor3->SetSimulatePhysics(false);
+    RotorShaft3 = CreateDefaultSubobject<UStaticMeshComponent>(TEXT("RotorShaft3"));
+    RotorShaft3->SetupAttachment(DroneMesh);
+    RotorShaft3->SetSimulatePhysics(false);
+    RotorRing3 = CreateDefaultSubobject<UStaticMeshComponent>(TEXT("RotorRing3"));
+    RotorRing3->SetupAttachment(DroneMesh);
+    RotorRing3->SetSimulatePhysics(false);
 
     RotorPivot4 = CreateDefaultSubobject<USceneComponent>(TEXT("RotorPivot4"));
     RotorPivot4->SetupAttachment(DroneMesh);
-
-    Rotor1 = CreateDefaultSubobject<UStaticMeshComponent>(TEXT("Rotor1"));
-    Rotor1->SetSimulatePhysics(false);
-
-    Rotor2 = CreateDefaultSubobject<UStaticMeshComponent>(TEXT("Rotor2"));
-    Rotor2->SetSimulatePhysics(false);
-
-    Rotor3 = CreateDefaultSubobject<UStaticMeshComponent>(TEXT("Rotor3"));
-    Rotor3->SetSimulatePhysics(false);
-
+    RotorPivot4->SetRelativeLocation(RotorPivotOffset4);
     Rotor4 = CreateDefaultSubobject<UStaticMeshComponent>(TEXT("Rotor4"));
+    Rotor4->SetupAttachment(RotorPivot4);
     Rotor4->SetSimulatePhysics(false);
-
-    RotorShaft1 = CreateDefaultSubobject<UStaticMeshComponent>(TEXT("RotorShaft1"));
-    RotorShaft1->SetupAttachment(RotorPivot1);
-    RotorShaft1->SetSimulatePhysics(false);
-
-    RotorShaft2 = CreateDefaultSubobject<UStaticMeshComponent>(TEXT("RotorShaft2"));
-    RotorShaft2->SetupAttachment(RotorPivot2);
-    RotorShaft2->SetSimulatePhysics(false);
-
-    RotorShaft3 = CreateDefaultSubobject<UStaticMeshComponent>(TEXT("RotorShaft3"));
-    RotorShaft3->SetupAttachment(RotorPivot3);
-    RotorShaft3->SetSimulatePhysics(false);
-
     RotorShaft4 = CreateDefaultSubobject<UStaticMeshComponent>(TEXT("RotorShaft4"));
-    RotorShaft4->SetupAttachment(RotorPivot4);
+    RotorShaft4->SetupAttachment(DroneMesh);
     RotorShaft4->SetSimulatePhysics(false);
-
-    RotorRing1 = CreateDefaultSubobject<UStaticMeshComponent>(TEXT("RotorRing1"));
-    RotorRing1->SetupAttachment(RotorPivot1);
-    RotorRing1->SetSimulatePhysics(false);
-
-    RotorRing2 = CreateDefaultSubobject<UStaticMeshComponent>(TEXT("RotorRing2"));
-    RotorRing2->SetupAttachment(RotorPivot2);
-    RotorRing2->SetSimulatePhysics(false);
-
-    RotorRing3 = CreateDefaultSubobject<UStaticMeshComponent>(TEXT("RotorRing3"));
-    RotorRing3->SetupAttachment(RotorPivot3);
-    RotorRing3->SetSimulatePhysics(false);
-
     RotorRing4 = CreateDefaultSubobject<UStaticMeshComponent>(TEXT("RotorRing4"));
-    RotorRing4->SetupAttachment(RotorPivot4);
+    RotorRing4->SetupAttachment(DroneMesh);
     RotorRing4->SetSimulatePhysics(false);
-
-    Rotor1->SetupAttachment(RotorShaft1);
-    Rotor2->SetupAttachment(RotorShaft2);
-    Rotor3->SetupAttachment(RotorShaft3);
-    Rotor4->SetupAttachment(RotorShaft4);
 
     SpringArm = CreateDefaultSubobject<USpringArmComponent>(TEXT("SpringArm"));
     SpringArm->SetupAttachment(PhysicsRoot);
@@ -210,15 +203,30 @@ void ADroneActor::Tick(float DeltaTime)
         PhysicsRoot->AddForce(FVector(0.f, 0.f, AltitudeCorrection * 100.f));
     }
 
-    //Rotor animation
-    RotorAngle += RotorSpeed * DeltaTime;
-    if (RotorAngle >= 360.f) RotorAngle -= 360.f;
+    // Rotor animation:
+    // Rotate each propeller around its local Z axis, using the pivot as the real mount point.
+    RotorAngle = FMath::Fmod(RotorAngle + RotorSpeed * DeltaTime, 360.f);
 
-    if (RotorPivot1) RotorPivot1->SetRelativeRotation(FRotator(0.f, RotorAngle, 0.f));
-    if (RotorPivot2) RotorPivot2->SetRelativeRotation(FRotator(0.f, -RotorAngle, 0.f));
-    if (RotorPivot3) RotorPivot3->SetRelativeRotation(FRotator(0.f, RotorAngle, 0.f));
-    if (RotorPivot4) RotorPivot4->SetRelativeRotation(FRotator(0.f, -RotorAngle, 0.f));   
-    
+    const FRotator RotorRotationCW(0.f, 0.f, RotorAngle);
+    const FRotator RotorRotationCCW(0.f, 0.f, -RotorAngle);
+
+    if (RotorPivot1)
+    {
+        RotorPivot1->SetRelativeRotation(RotorRotationCW);
+    }
+    if (RotorPivot2)
+    {
+        RotorPivot2->SetRelativeRotation(RotorRotationCCW);
+    }
+    if (RotorPivot3)
+    {
+        RotorPivot3->SetRelativeRotation(RotorRotationCW);
+    }
+    if (RotorPivot4)
+    {
+        RotorPivot4->SetRelativeRotation(RotorRotationCCW);
+    }
+
     //HUD
     if (HUDWidget)
     {
