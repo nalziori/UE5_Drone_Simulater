@@ -73,3 +73,11 @@ Plugins/**/Intermediate/*
 
 # Cache files for the editor to use
 DerivedDataCache/*
+
+# Editor-generated compile databases (machine-specific)
+.vscode/
+
+# Headless flight sim build outputs
+Tools/FlightSim/*.exe
+Tools/FlightSim/*.pdb
+Tools/FlightSim/out/

@@ -12,6 +12,9 @@ public class Drone_Simulater : ModuleRules
 
 		PrivateDependencyModuleNames.AddRange(new string[] { "UMG", "Slate", "SlateCore" });
 
+		// Engine-independent flight dynamics/control (FlightCore/*.h), shared with Tools/FlightSim.
+		PublicIncludePaths.Add(ModuleDirectory);
+
 		// Uncomment if you are using Slate UI
 		// PrivateDependencyModuleNames.AddRange(new string[] { "Slate", "SlateCore" });
 		

@@ -4,34 +4,8 @@
 #include "Components/BoxComponent.h"
 #include "InputActionValue.h"
 #include "Blueprint/UserWidget.h"
+#include "FlightCore/Controller.h"
 #include "DroneActor.generated.h"
-
-USTRUCT()
-struct FPIDController
-{
-    GENERATED_BODY()
-
-    UPROPERTY(EditAnywhere) float Kp = 5.0f;
-    UPROPERTY(EditAnywhere) float Ki = 0.1f;
-    UPROPERTY(EditAnywhere) float Kd = 2.0f;
-
-    float Integral = 0.f;
-    float PrevError = 0.f;
-
-    float Update(float Error, float DeltaTime)
-    {
-        Integral += Error * DeltaTime;
-        float Derivative = (Error - PrevError) / DeltaTime;
-        PrevError = Error;
-        return Kp * Error + Ki * Integral + Kd * Derivative;
-    }
-
-    void Reset()
-    {
-        Integral = 0.f;
-        PrevError = 0.f;
-    }
-};
 
 UCLASS()
 class DRONE_SIMULATER_API ADroneActor : public APawn
@@ -43,6 +17,7 @@ public:
 
 protected:
     virtual void BeginPlay() override;
+    virtual void EndPlay(const EEndPlayReason::Type EndPlayReason) override;
 
 public:
     virtual void Tick(float DeltaTime) override;
@@ -157,8 +132,17 @@ public:
     UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Drone|Rotor")
     class UStaticMeshComponent* Rotor4;
 
+    // Visual spin rate (deg/s) at hover RPM; scales with the simulated motor speed.
     UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Drone|Rotor")
     float RotorSpeed = 100.f;
+
+    // Steady wind in Unreal axes (X forward, Y right, Z up), m/s.
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Drone|Simulation")
+    FVector WindMps = FVector::ZeroVector;
+
+    // Write t/position/attitude/motor speeds at 50 Hz to Saved/FlightLogs/*.csv on EndPlay.
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Drone|Simulation")
+    bool bRecordFlightLog = true;
 
     void HandleThrottle(const FInputActionValue& Value);
     void HandlePitch(const FInputActionValue& Value);
@@ -167,18 +151,26 @@ public:
     void HandleHover(const FInputActionValue& Value);
     void ResetPitch(const FInputActionValue& Value);
     void ResetRoll(const FInputActionValue& Value);
+    void ResetThrottle(const FInputActionValue& Value);
+    void ResetYaw(const FInputActionValue& Value);
 
 private:
     bool bIsFPV = false;
-    bool bHoverMode = false;
-    float TargetAltitude = 0.f;
 
-    FPIDController PitchPID;
-    FPIDController RollPID;
-    FPIDController AltitudePID;
+    // FlightCore runs at a fixed 1 kHz physics / 250 Hz control rate, decoupled from frame rate.
+    fc::Quadrotor Quad;
+    fc::Controller Ctrl;
+    fc::PilotInput Pilot;
+    double OmegaCmd[4] = {0, 0, 0, 0};
+    double Accumulator = 0;
+    double SimTime = 0;
+    long long SimSteps = 0;
+    FVector OriginUE;          // world location of the sim origin (spawn point = ground level)
+    float RotorAngle[4] = {0, 0, 0, 0};
+    TArray<FString> FlightLog;
 
-    float InputPitchAxis = 0.f;
-    float InputRollAxis  = 0.f;
-
-    float RotorAngle = 0.f;
+    void StepSimulation(double Dt);
+    void ApplyStateToActor();
+    void UpdateRotors(float DeltaTime);
+    void UpdateHUD();
 };

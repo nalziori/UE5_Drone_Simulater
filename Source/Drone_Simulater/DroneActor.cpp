@@ -7,6 +7,9 @@
 #include "EnhancedInputSubsystems.h"
 #include "Components/TextBlock.h"
 #include "GameFramework/PlayerController.h"
+#include "Misc/FileHelper.h"
+#include "Misc/Paths.h"
+#include "HAL/PlatformFileManager.h"
 
 ADroneActor::ADroneActor()
 {
@@ -15,8 +18,8 @@ ADroneActor::ADroneActor()
 
     PhysicsRoot = CreateDefaultSubobject<UBoxComponent>(TEXT("PhysicsRoot"));
     SetRootComponent(PhysicsRoot);
-    PhysicsRoot->SetSimulatePhysics(true);
-    PhysicsRoot->SetEnableGravity(true);
+    // Motion comes from FlightCore; the box is kinematic and only used for sweeps against the level.
+    PhysicsRoot->SetSimulatePhysics(false);
     PhysicsRoot->SetBoxExtent(FVector(50.f, 50.f, 20.f));
     PhysicsRoot->SetCollisionEnabled(ECollisionEnabled::QueryAndPhysics);
     PhysicsRoot->SetCollisionProfileName(TEXT("BlockAll"));
@@ -97,18 +100,29 @@ ADroneActor::ADroneActor()
     FPVCamera->SetActive(false);
 }
 
+namespace
+{
+    constexpr double PhysicsDt = 0.001;   // 1 kHz rigid-body integration
+    constexpr int ControlDivider = 4;     // 250 Hz controller
+    constexpr double MaxFrameDt = 0.1;    // drop sim time after hitches instead of spiralling
+    constexpr double CmPerM = 100.0;
+
+    FVector ToUE(const fc::Vec3& V) { const fc::Vec3 L = fc::toLeftHanded(V); return FVector(L.x, L.y, L.z); }
+    fc::Vec3 FromUE(const FVector& V) { return fc::fromLeftHanded(fc::Vec3{V.X, V.Y, V.Z}); }
+    FQuat ToUE(const fc::Quat& Q) { const fc::Quat L = fc::toLeftHanded(Q); return FQuat(L.x, L.y, L.z, L.w); }
+    fc::Quat FromUE(const FQuat& Q) { return fc::fromLeftHanded(fc::Quat{Q.W, Q.X, Q.Y, Q.Z}); }
+}
+
 void ADroneActor::BeginPlay()
 {
     Super::BeginPlay();
 
-    PitchPID.Kp = 1.5f;  PitchPID.Ki = 0.0f;  PitchPID.Kd = 4.0f;
-    RollPID.Kp  = 1.5f;  RollPID.Ki  = 0.0f;  RollPID.Kd  = 4.0f;
-    AltitudePID.Kp = 10.0f; AltitudePID.Ki = 0.1f; AltitudePID.Kd = 4.0f;
-
-    PhysicsRoot->SetMassOverrideInKg(NAME_None, 1.5f, true);
-    PhysicsRoot->SetCenterOfMass(FVector(0.f, 0.f, 0.f));
-    PhysicsRoot->SetLinearDamping(0.3f);
-    PhysicsRoot->SetAngularDamping(4.0f);
+    // Spawn point is the sim origin and ground level; keep the spawn heading.
+    OriginUE = GetActorLocation();
+    Quad.s = fc::QuadState{};
+    Quad.s.att = FromUE(FQuat(FRotator(0.f, GetActorRotation().Yaw, 0.f)));
+    Ctrl.mode = fc::FlightMode::Angle;
+    Ctrl.reset(Quad.s);
 
     if (APlayerController* PC = Cast<APlayerController>(GetController()))
     {
@@ -127,122 +141,119 @@ void ADroneActor::BeginPlay()
             HUDWidget->AddToViewport();
         }
     }
+
+    if (bRecordFlightLog)
+    {
+        FlightLog.Add(TEXT("t,x,y,z,vx,vy,vz,roll,pitch,yaw,w1,w2,w3,w4,mode"));
+    }
+}
+
+void ADroneActor::EndPlay(const EEndPlayReason::Type EndPlayReason)
+{
+    if (bRecordFlightLog && FlightLog.Num() > 1)
+    {
+        const FString Dir = FPaths::ProjectSavedDir() / TEXT("FlightLogs");
+        FPlatformFileManager::Get().GetPlatformFile().CreateDirectoryTree(*Dir);
+        const FString Path = Dir / FString::Printf(TEXT("flight_%s.csv"), *FDateTime::Now().ToString());
+        FFileHelper::SaveStringArrayToFile(FlightLog, *Path);
+        UE_LOG(LogTemp, Log, TEXT("Flight log written: %s (%d rows)"), *Path, FlightLog.Num() - 1);
+    }
+    Super::EndPlay(EndPlayReason);
 }
 
 void ADroneActor::Tick(float DeltaTime)
 {
     Super::Tick(DeltaTime);
 
-    //drone local axis
-    FVector DroneForward = PhysicsRoot->GetForwardVector();
-    FVector DroneRight   = PhysicsRoot->GetRightVector();
-    FVector DroneUp      = PhysicsRoot->GetUpVector();
-    FVector WorldUp      = FVector::UpVector;
+    Quad.wind = FromUE(WindMps);
 
-    //present drone degrees against local axis
-    float LocalPitchAngle = FMath::RadiansToDegrees(
-        FMath::Asin(FMath::Clamp(FVector::DotProduct(DroneForward, -WorldUp), -1.f, 1.f)));
-    float LocalRollAngle = FMath::RadiansToDegrees(
-        FMath::Asin(FMath::Clamp(FVector::DotProduct(DroneRight, -WorldUp), -1.f, 1.f)));
-
-    UE_LOG(LogTemp, Warning, TEXT("=== 드론 초기 방향 ==="));
-    UE_LOG(LogTemp, Warning, TEXT("Forward: %s"), *PhysicsRoot->GetForwardVector().ToString());
-    UE_LOG(LogTemp, Warning, TEXT("Right: %s"), *PhysicsRoot->GetRightVector().ToString());
-    UE_LOG(LogTemp, Warning, TEXT("Up: %s"), *PhysicsRoot->GetUpVector().ToString());    
-    UE_LOG(LogTemp, Warning, TEXT("DroneForward: %s"), *DroneForward.ToString());
-    UE_LOG(LogTemp, Warning, TEXT("LocalPitch: %.1f / LocalRoll: %.1f"), LocalPitchAngle, LocalRollAngle);
-    UE_LOG(LogTemp, Warning, TEXT("InputPitch: %.1f / InputRoll: %.1f"), InputPitchAxis, InputRollAxis);
-
-    // if (GEngine)
-    // {
-    //     GEngine->AddOnScreenDebugMessage(1, 0.f, FColor::Red,
-    //         FString::Printf(TEXT("DroneForward: %s"), *DroneForward.ToString()));
-    //     GEngine->AddOnScreenDebugMessage(2, 0.f, FColor::Green,
-    //         FString::Printf(TEXT("LocalPitch: %.1f / LocalRoll: %.1f"), LocalPitchAngle, LocalRollAngle));
-    //     GEngine->AddOnScreenDebugMessage(3, 0.f, FColor::Yellow,
-    //         FString::Printf(TEXT("InputPitch: %.1f / InputRoll: %.1f"), InputPitchAxis, InputRollAxis));
-    // }
-
-    if (FMath::Abs(LocalPitchAngle) < 85.f && FMath::Abs(LocalRollAngle) < 85.f)
+    Accumulator += FMath::Min<double>(DeltaTime, MaxFrameDt);
+    while (Accumulator >= PhysicsDt)
     {
-        float TargetPitch = InputPitchAxis * 30.f;
-        float TargetRoll  = InputRollAxis  * 30.f;
-
-        float PitchError = TargetPitch - LocalPitchAngle;
-        float RollError  = TargetRoll  - LocalRollAngle;
-
-        float PitchCorrection = PitchPID.Update(PitchError, DeltaTime);
-        float RollCorrection  = RollPID.Update(RollError, DeltaTime);
-
-
-        FVector Torque = DroneForward * (-RollCorrection * 3000.f)
-                       + DroneRight * (PitchCorrection * 3000.f);
-        PhysicsRoot->AddTorqueInDegrees(Torque);
+        StepSimulation(PhysicsDt);
+        Accumulator -= PhysicsDt;
     }
-    else
+
+    ApplyStateToActor();
+    UpdateRotors(DeltaTime);
+    UpdateHUD();
+}
+
+void ADroneActor::StepSimulation(double Dt)
+{
+    if (SimSteps % ControlDivider == 0)
     {
-        PitchPID.Reset();
-        RollPID.Reset();
+        Ctrl.update(Quad.p, Quad.s, Pilot, Dt * ControlDivider, OmegaCmd);
+    }
+    Quad.step(OmegaCmd, Dt);
+    SimTime += Dt;
+    ++SimSteps;
 
-        FVector RotationAxis = FVector::CrossProduct(DroneUp, WorldUp);
-        float RotationAmount = FVector::DotProduct(DroneUp, WorldUp);
+    if (bRecordFlightLog && SimSteps % 20 == 0)   // 50 Hz
+    {
+        const fc::Vec3 E = Quad.s.att.toEuler();
+        const fc::QuadState& S = Quad.s;
+        FlightLog.Add(FString::Printf(TEXT("%.3f,%.3f,%.3f,%.3f,%.3f,%.3f,%.3f,%.2f,%.2f,%.2f,%.0f,%.0f,%.0f,%.0f,%d"),
+            SimTime, S.pos.x, S.pos.y, S.pos.z, S.vel.x, S.vel.y, S.vel.z,
+            E.x / fc::kDeg, E.y / fc::kDeg, E.z / fc::kDeg,
+            S.omega[0], S.omega[1], S.omega[2], S.omega[3], static_cast<int32>(Ctrl.mode)));
+    }
+}
 
-        if (RotationAxis.SizeSquared() > 0.01f)
+void ADroneActor::ApplyStateToActor()
+{
+    const FVector Target = OriginUE + ToUE(Quad.s.pos) * CmPerM;
+    FHitResult Hit;
+    SetActorLocationAndRotation(Target, ToUE(Quad.s.att), true, &Hit);
+
+    if (Hit.bBlockingHit)
+    {
+        // Level geometry wins: snap the sim to where the sweep stopped and remove velocity into the surface.
+        // ponytail: no bounce or crash damage; add a contact model if collisions need to matter.
+        Quad.s.pos = FromUE(GetActorLocation() - OriginUE) / CmPerM;
+        const fc::Vec3 N = FromUE(Hit.ImpactNormal);
+        const double Into = Quad.s.vel.dot(N);
+        if (Into < 0)
         {
-            PhysicsRoot->AddTorqueInRadians(
-                RotationAxis.GetSafeNormal() * (1.f - RotationAmount) * 500000.f);
+            Quad.s.vel = Quad.s.vel - N * Into;
         }
     }
+}
 
-    //hovering
-    if (bHoverMode)
+void ADroneActor::UpdateRotors(float DeltaTime)
+{
+    // RotorPivotN should sit on FlightCore motor N: 1 front-left, 2 front-right, 3 rear-right, 4 rear-left.
+    USceneComponent* Pivots[4] = {RotorPivot1, RotorPivot2, RotorPivot3, RotorPivot4};
+    const double HoverOmega = FMath::Sqrt(Quad.p.hoverThrustPerMotor() / Quad.p.kThrust);
+    for (int32 i = 0; i < 4; ++i)
     {
-        float CurrentAltitude = GetActorLocation().Z;
-        float AltitudeError = TargetAltitude - CurrentAltitude;
-        float AltitudeCorrection = AltitudePID.Update(AltitudeError, DeltaTime);
-        PhysicsRoot->AddForce(FVector(0.f, 0.f, AltitudeCorrection * 100.f));
+        const double Visual = RotorSpeed * Quad.s.omega[i] / HoverOmega;
+        RotorAngle[i] = static_cast<float>(FMath::Fmod(RotorAngle[i] + fc::Quadrotor::kSpin[i] * Visual * DeltaTime, 360.0));
+        if (Pivots[i])
+        {
+            Pivots[i]->SetRelativeRotation(FRotator(0.f, 0.f, RotorAngle[i]));
+        }
     }
+}
 
-    // Rotor animation:
-    // Rotate each propeller around its local Z axis, using the pivot as the real mount point.
-    RotorAngle = FMath::Fmod(RotorAngle + RotorSpeed * DeltaTime, 360.f);
-
-    const FRotator RotorRotationCW(0.f, 0.f, RotorAngle);
-    const FRotator RotorRotationCCW(0.f, 0.f, -RotorAngle);
-
-    if (RotorPivot1)
+void ADroneActor::UpdateHUD()
+{
+    if (!HUDWidget)
     {
-        RotorPivot1->SetRelativeRotation(RotorRotationCW);
+        return;
     }
-    if (RotorPivot2)
+    if (UTextBlock* AltitudeText = Cast<UTextBlock>(HUDWidget->GetWidgetFromName(TEXT("Text_Altitude"))))
     {
-        RotorPivot2->SetRelativeRotation(RotorRotationCCW);
+        AltitudeText->SetText(FText::FromString(FString::Printf(TEXT("고도: %.1fm"), Quad.s.pos.z)));
     }
-    if (RotorPivot3)
+    if (UTextBlock* SpeedText = Cast<UTextBlock>(HUDWidget->GetWidgetFromName(TEXT("Text_Speed"))))
     {
-        RotorPivot3->SetRelativeRotation(RotorRotationCW);
+        SpeedText->SetText(FText::FromString(FString::Printf(TEXT("속도: %.1fm/s"), Quad.s.vel.norm())));
     }
-    if (RotorPivot4)
+    if (UTextBlock* HoverText = Cast<UTextBlock>(HUDWidget->GetWidgetFromName(TEXT("Text_HoverMode"))))
     {
-        RotorPivot4->SetRelativeRotation(RotorRotationCCW);
-    }
-
-    //HUD
-    if (HUDWidget)
-    {
-        float Altitude = GetActorLocation().Z / 100.f;
-        UTextBlock* AltitudeText = Cast<UTextBlock>(HUDWidget->GetWidgetFromName(TEXT("Text_Altitude")));
-        if (AltitudeText)
-            AltitudeText->SetText(FText::FromString(FString::Printf(TEXT("고도: %.1fm"), Altitude)));
-
-        float Speed = PhysicsRoot->GetPhysicsLinearVelocity().Size() / 100.f;
-        UTextBlock* SpeedText = Cast<UTextBlock>(HUDWidget->GetWidgetFromName(TEXT("Text_Speed")));
-        if (SpeedText)
-            SpeedText->SetText(FText::FromString(FString::Printf(TEXT("속도: %.1fm/s"), Speed)));
-
-        UTextBlock* HoverText = Cast<UTextBlock>(HUDWidget->GetWidgetFromName(TEXT("Text_HoverMode")));
-        if (HoverText)
-            HoverText->SetText(FText::FromString(bHoverMode ? TEXT("호버: ON") : TEXT("호버: OFF")));
+        const bool bHold = Ctrl.mode == fc::FlightMode::Position;
+        HoverText->SetText(FText::FromString(bHold ? TEXT("모드: 위치 고정") : TEXT("모드: 자세 (고도 유지)")));
     }
 }
 
@@ -256,56 +267,27 @@ void ADroneActor::SetupPlayerInputComponent(UInputComponent* PlayerInputComponen
         EIC->BindAction(IA_Pitch,    ETriggerEvent::Triggered, this, &ADroneActor::HandlePitch);
         EIC->BindAction(IA_Roll,     ETriggerEvent::Triggered, this, &ADroneActor::HandleRoll);
         EIC->BindAction(IA_Yaw,      ETriggerEvent::Triggered, this, &ADroneActor::HandleYaw);
-        EIC->BindAction(IA_Hover,    ETriggerEvent::Started, this, &ADroneActor::HandleHover);
+        EIC->BindAction(IA_Hover,    ETriggerEvent::Started,   this, &ADroneActor::HandleHover);
+        EIC->BindAction(IA_Throttle, ETriggerEvent::Completed, this, &ADroneActor::ResetThrottle);
         EIC->BindAction(IA_Pitch,    ETriggerEvent::Completed, this, &ADroneActor::ResetPitch);
         EIC->BindAction(IA_Roll,     ETriggerEvent::Completed, this, &ADroneActor::ResetRoll);
+        EIC->BindAction(IA_Yaw,      ETriggerEvent::Completed, this, &ADroneActor::ResetYaw);
         EIC->BindAction(IA_CameraToggle, ETriggerEvent::Started, this, &ADroneActor::ToggleCamera);
     }
-
-    
 }
 
-void ADroneActor::HandleThrottle(const FInputActionValue& Value)
-{
-    float Axis = Value.Get<float>();
-    FVector UpVector = PhysicsRoot->GetUpVector();
-    PhysicsRoot->AddForce(UpVector * Axis * 10000.f);
-}
+// Sticks: throttle = climb rate, pitch/roll = attitude angle (+pitch nose down, +roll right), yaw = turn rate.
+void ADroneActor::HandleThrottle(const FInputActionValue& Value) { Pilot.throttle = FMath::Clamp(Value.Get<float>(), -1.f, 1.f); }
+void ADroneActor::HandlePitch(const FInputActionValue& Value)    { Pilot.pitch = FMath::Clamp(Value.Get<float>(), -1.f, 1.f); }
+void ADroneActor::HandleRoll(const FInputActionValue& Value)     { Pilot.roll = FMath::Clamp(Value.Get<float>(), -1.f, 1.f); }
+// UE yaw + is a right turn; FlightCore yaw + is a left turn (right-handed).
+void ADroneActor::HandleYaw(const FInputActionValue& Value)      { Pilot.yaw = -FMath::Clamp(Value.Get<float>(), -1.f, 1.f); }
 
-void ADroneActor::HandlePitch(const FInputActionValue& Value)
-{
-    InputPitchAxis = Value.Get<float>();
-    //GEngine->AddOnScreenDebugMessage(-1, 1.f, FColor::Red, FString::Printf(TEXT("Pitch Input: %f"), Axis));
-    //PhysicsRoot->AddTorqueInDegrees(FVector(0.f, Axis * 1000000.f, 0.f));
-}
-
-void ADroneActor::HandleRoll(const FInputActionValue& Value)
-{
-    InputRollAxis = Value.Get<float>();
-    //GEngine->AddOnScreenDebugMessage(-1, 1.f, FColor::Green, FString::Printf(TEXT("Roll Input: %f"), Axis));
-    //PhysicsRoot->AddTorqueInDegrees(FVector(Axis * -1000000.f, 0.f, 0.f));
-}
-
-void ADroneActor::HandleYaw(const FInputActionValue& Value)
-{
-    float Axis = Value.Get<float>();
-    FVector DroneUp = PhysicsRoot->GetUpVector();
-    PhysicsRoot->AddTorqueInRadians(DroneUp * Axis * 20000.f);
-}
-
+// Hover key toggles position hold (FlightCore Position mode) <-> manual attitude flight.
 void ADroneActor::HandleHover(const FInputActionValue& Value)
 {
-    bHoverMode = !bHoverMode;
-    if (bHoverMode)
-    {
-        TargetAltitude = GetActorLocation().Z;
-        GEngine->AddOnScreenDebugMessage(-1, 2.f, FColor::Cyan,
-            FString::Printf(TEXT("호버링 ON - 고도: %.1f"), TargetAltitude));
-    }
-    else
-    {
-        GEngine->AddOnScreenDebugMessage(-1, 2.f, FColor::Yellow, TEXT("호버링 OFF"));
-    }
+    const bool bToHold = Ctrl.mode == fc::FlightMode::Angle;
+    Ctrl.setMode(bToHold ? fc::FlightMode::Position : fc::FlightMode::Angle, Quad.s);
 }
 
 void ADroneActor::ToggleCamera(const FInputActionValue& Value)
@@ -315,5 +297,7 @@ void ADroneActor::ToggleCamera(const FInputActionValue& Value)
     FPVCamera->SetActive(bIsFPV);
 }
 
-void ADroneActor::ResetPitch(const FInputActionValue& Value) { InputPitchAxis = 0.f; }
-void ADroneActor::ResetRoll(const FInputActionValue& Value)  { InputRollAxis  = 0.f; }
+void ADroneActor::ResetPitch(const FInputActionValue& Value)    { Pilot.pitch = 0; }
+void ADroneActor::ResetRoll(const FInputActionValue& Value)     { Pilot.roll = 0; }
+void ADroneActor::ResetThrottle(const FInputActionValue& Value) { Pilot.throttle = 0; }
+void ADroneActor::ResetYaw(const FInputActionValue& Value)      { Pilot.yaw = 0; }
