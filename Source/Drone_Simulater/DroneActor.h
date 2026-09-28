@@ -4,7 +4,7 @@
 #include "Components/BoxComponent.h"
 #include "InputActionValue.h"
 #include "Blueprint/UserWidget.h"
-#include "FlightCore/Controller.h"
+#include "FlightCore/Mission.h"
 #include "DroneActor.generated.h"
 
 UCLASS()
@@ -144,6 +144,24 @@ public:
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Drone|Simulation")
     bool bRecordFlightLog = true;
 
+    // Runtime safety monitor (FlightCore/Safety.h): hold -> land -> motors off; latched until restart.
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Drone|Safety")
+    bool bEnableSafetyMonitor = true;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Drone|Safety")
+    float GeofenceRadiusM = 100.f;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Drone|Safety")
+    float CeilingM = 50.f;
+
+    // Pre-flight check at BeginPlay: fly the reference mission headlessly this many times at |WindMps|
+    // with randomized model/sensor error. 0 = skip.
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Drone|Safety")
+    int32 PreflightRuns = 20;
+
+    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Drone|Safety")
+    FString PreflightResult;
+
     void HandleThrottle(const FInputActionValue& Value);
     void HandlePitch(const FInputActionValue& Value);
     void HandleRoll(const FInputActionValue& Value);
@@ -161,6 +179,8 @@ private:
     fc::Quadrotor Quad;
     fc::Controller Ctrl;
     fc::PilotInput Pilot;
+    fc::SafetyMonitor Safety;
+    fc::SafetyAction LoggedSafetyAction = fc::SafetyAction::None;
     double OmegaCmd[4] = {0, 0, 0, 0};
     double Accumulator = 0;
     double SimTime = 0;
@@ -173,4 +193,5 @@ private:
     void ApplyStateToActor();
     void UpdateRotors(float DeltaTime);
     void UpdateHUD();
+    void RunPreflightCheck();
 };

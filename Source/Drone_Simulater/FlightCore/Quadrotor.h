@@ -46,6 +46,9 @@ public:
     QuadState s;
     Vec3 wind;            // world wind velocity, m/s
     Vec3 extForce;        // world disturbance force, N (e.g. gust pulse)
+    // Per-motor thrust/torque efficiency: manufacturing spread or damage (0 = motor out).
+    // The controller never sees this; it mixes with nominal parameters.
+    double motorEff[4] = {1, 1, 1, 1};
 
     // +1 = CCW seen from above (body reaction torque is -z).
     static constexpr int kSpin[4] = {+1, -1, +1, -1};
@@ -57,7 +60,7 @@ public:
         return {sx[i] * d, sy[i] * d, 0};
     }
 
-    double motorThrust(int i) const { return p.kThrust * s.omega[i] * s.omega[i]; }
+    double motorThrust(int i) const { return motorEff[i] * p.kThrust * s.omega[i] * s.omega[i]; }
 
     // Advance by dt with commanded motor speeds (rad/s). Semi-implicit Euler; keep dt <= 2 ms.
     void step(const double omegaCmd[4], double dt) {
@@ -74,7 +77,7 @@ public:
             double t = motorThrust(i);
             thrust += t;
             torque += motorPos(i).cross(Vec3{0, 0, t});
-            torque.z += -kSpin[i] * p.kTorque * s.omega[i] * s.omega[i];
+            torque.z += -kSpin[i] * motorEff[i] * p.kTorque * s.omega[i] * s.omega[i];
         }
         torque += s.rate * (-p.angularDrag);
 

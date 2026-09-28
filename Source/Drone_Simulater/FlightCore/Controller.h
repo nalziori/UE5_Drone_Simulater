@@ -69,6 +69,7 @@ public:
     Vec3 rateSetpoint;
     double collective = 0;
     bool saturated = false;
+    bool tiltLimited = false;           // horizontal acceleration clipped by maxTilt
 
     void reset(const QuadState& st) {
         ratePid.reset(); velPid.reset();
@@ -92,8 +93,8 @@ public:
             Vec3 velSp = (posSetpoint - meas.pos) * g.posP;
             Vec3 horiz = clampNorm(Vec3{velSp.x, velSp.y, 0}, lim.maxHorizSpeed);
             velSp = {horiz.x, horiz.y, clampd(velSp.z, -lim.maxClimb, lim.maxClimb)};
-            accSp = velPid.update(velSp, meas.vel, dt, saturated);
-            thrustVectorToAttitude(p, accSp);
+            accSp = velPid.update(velSp, meas.vel, dt, saturated || tiltLimited);
+            thrustVectorToAttitude(p, accSp, velPid.ki.cwise(velPid.integ));
         } else {
             yawSetpoint = wrapPi(yawSetpoint + in.yaw * lim.maxYawRate * dt);
             Vec3 velSp{meas.vel.x, meas.vel.y, in.throttle * lim.maxClimb};
@@ -156,11 +157,20 @@ private:
     }
 
     // Desired acceleration -> tilted thrust vector (limited to maxTilt) + yaw -> attitude setpoint.
-    void thrustVectorToAttitude(const QuadParams& p, Vec3 accSp) {
+    // When the tilt limit clips, the integrator share (steady disturbance such as wind) keeps priority and
+    // the remaining tilt goes to the proportional share; clipping both equally lets the wind push the vehicle.
+    void thrustVectorToAttitude(const QuadParams& p, Vec3 accSp, Vec3 accHold) {
         Vec3 f = (accSp + Vec3{0, 0, p.gravity}) * p.mass;
         if (f.z < 0.1 * p.mass * p.gravity) f.z = 0.1 * p.mass * p.gravity;
         double horiz = std::sqrt(f.x * f.x + f.y * f.y), maxH = f.z * std::tan(lim.maxTilt);
-        if (horiz > maxH) { f.x *= maxH / horiz; f.y *= maxH / horiz; }
+        tiltLimited = horiz > maxH;
+        if (tiltLimited) {
+            Vec3 b = Vec3{accHold.x, accHold.y, 0} * p.mass, e = Vec3{f.x, f.y, 0} - b;
+            double bb = b.dot(b), be = b.dot(e), ee = e.dot(e), k = 0;  // largest k in [0,1]: |b + k e| = maxH
+            if (bb < maxH * maxH && ee > 1e-12) k = (-be + std::sqrt(be * be - ee * (bb - maxH * maxH))) / ee;
+            Vec3 h = clampNorm(b + e * clampd(k, 0.0, 1.0), maxH);
+            f.x = h.x; f.y = h.y;
+        }
         Vec3 zb = f.normalized();
         Vec3 xc{std::cos(yawSetpoint), std::sin(yawSetpoint), 0};
         Vec3 yb = zb.cross(xc).normalized();

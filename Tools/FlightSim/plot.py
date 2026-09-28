@@ -62,4 +62,46 @@ ax.set(xlabel="x [m]", ylabel="y [m] (left)", title="Waypoint square, 5 m altitu
 ax.legend()
 save(fig, "waypoints.png")
 
+d = load("09_envelope.csv")
+pass_rate = [100 * p / n for p, n in zip(d["passes"], d["runs"])]
+fig, (a1, a2) = plt.subplots(2, 1, figsize=(7, 5), sharex=True)
+a1.plot(d["wind"], pass_rate, "o-", ms=4)
+a1.axvspan(0, 4.5, color="green", alpha=0.12, label="all runs passed (also on independent seeds)")
+a1.set(ylabel="mission pass rate [%]", ylim=(-5, 105),
+       title="Reference mission vs mean wind (100 randomized runs per point)")
+a1.legend(loc="lower left")
+a2.semilogy(d["wind"], d["dev_p95"], "o-", ms=4, label="path deviation p95")
+a2.semilogy(d["wind"], d["dev_max"], "s--", ms=3, label="path deviation max")
+a2.axhline(1.0, c="gray", ls=":", lw=1, label="criterion 1.0 m")
+a2.set(xlabel="mean wind [m/s] (turbulence σ = 20 % of mean)", ylabel="deviation [m]")
+a2.legend(loc="upper left")
+save(fig, "envelope.png")
+
+
+def shade(ax, d):
+    names = {1: ("HOLD", "orange"), 2: ("LAND", "red"), 3: ("TERMINATE", "black")}
+    for code, (name, color) in names.items():
+        ts = [t for t, s in zip(d["t"], d["safety"]) if s == code]
+        if ts:
+            ax.axvspan(min(ts), max(ts), color=color, alpha=0.12, label=name)
+
+
+d = load("07d_geofence.csv")
+fig, (a1, a2) = plt.subplots(2, 1, figsize=(7, 5.2))
+r = [(x * x + y * y) ** 0.5 for x, y in zip(d["x"], d["y"])]
+a1.plot(d["t"], r, label="distance from home")
+a1.plot(d["t"], d["z"], label="altitude")
+a1.axhline(30, c="gray", ls=":", lw=1, label="geofence 30 m")
+shade(a1, d)
+a1.set(ylabel="[m]", title="Geofence: commanded 60 m away → hold → land → motors off")
+a1.legend(loc="center right", fontsize=8)
+d = load("07c_gps_loss.csv")
+a2.plot(d["t"], d["x"], label="x (downwind drift)")
+a2.plot(d["t"], d["z"], label="altitude")
+a2.axvline(2.0, c="gray", ls=":", lw=1, label="position lost")
+shade(a2, d)
+a2.set(xlabel="time [s]", ylabel="[m]", title="Position lost in 3 m/s wind → level descent without position")
+a2.legend(loc="center right", fontsize=8)
+save(fig, "failsafe.png")
+
 print("wrote", *sorted(p.name for p in dst.glob("*.png")))

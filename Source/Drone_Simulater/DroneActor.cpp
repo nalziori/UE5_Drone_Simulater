@@ -123,6 +123,10 @@ void ADroneActor::BeginPlay()
     Quad.s.att = FromUE(FQuat(FRotator(0.f, GetActorRotation().Yaw, 0.f)));
     Ctrl.mode = fc::FlightMode::Angle;
     Ctrl.reset(Quad.s);
+    Safety.lim.geofenceRadius = GeofenceRadiusM;
+    Safety.lim.ceiling = CeilingM;
+    Safety.reset(Quad.s.pos);
+    RunPreflightCheck();
 
     if (APlayerController* PC = Cast<APlayerController>(GetController()))
     {
@@ -144,8 +148,29 @@ void ADroneActor::BeginPlay()
 
     if (bRecordFlightLog)
     {
-        FlightLog.Add(TEXT("t,x,y,z,vx,vy,vz,roll,pitch,yaw,w1,w2,w3,w4,mode"));
+        FlightLog.Add(TEXT("t,x,y,z,vx,vy,vz,roll,pitch,yaw,w1,w2,w3,w4,mode,safety"));
     }
+}
+
+// Same FlightCore, flown headlessly before the real session: the reference mission (10 m square at 5 m)
+// under the configured mean wind with randomized turbulence, sensor noise and model error.
+// Uses FlightCore's nominal parameters, which is also what this actor flies.
+void ADroneActor::RunPreflightCheck()
+{
+    if (PreflightRuns <= 0)
+    {
+        return;
+    }
+    const double Wind = WindMps.Size();
+    int32 Passed = 0;
+    for (int32 i = 0; i < PreflightRuns; ++i)
+    {
+        Passed += fc::virtualFlight(Wind, 1000u + static_cast<uint32>(i)).pass ? 1 : 0;
+    }
+    const bool bGo = Passed == PreflightRuns;
+    PreflightResult = FString::Printf(TEXT("사전검증 %s: 기준 임무 %d/%d 통과 (평균풍 %.1f m/s)"),
+        bGo ? TEXT("PASS") : TEXT("FAIL"), Passed, PreflightRuns, Wind);
+    UE_LOG(LogTemp, Log, TEXT("%s"), *PreflightResult);
 }
 
 void ADroneActor::EndPlay(const EEndPlayReason::Type EndPlayReason)
@@ -183,7 +208,27 @@ void ADroneActor::StepSimulation(double Dt)
 {
     if (SimSteps % ControlDivider == 0)
     {
-        Ctrl.update(Quad.p, Quad.s, Pilot, Dt * ControlDivider, OmegaCmd);
+        // No GPS model in UE: position is always valid here.
+        fc::PilotInput CmdInput = Pilot;
+        if (bEnableSafetyMonitor)
+        {
+            Safety.update(Quad.s, true, Ctrl.saturated, Dt * ControlDivider);
+            Safety.command(Ctrl, CmdInput, Quad.s, true);
+        }
+        Ctrl.update(Quad.p, Quad.s, CmdInput, Dt * ControlDivider, OmegaCmd);
+        if (Safety.motorsOff)
+        {
+            for (double& Omega : OmegaCmd)
+            {
+                Omega = 0;
+            }
+        }
+        if (Safety.action != LoggedSafetyAction)
+        {
+            LoggedSafetyAction = Safety.action;
+            UE_LOG(LogTemp, Warning, TEXT("Safety %s (%s) at t=%.2f s"),
+                ANSI_TO_TCHAR(fc::actionName(Safety.action)), ANSI_TO_TCHAR(Safety.reason), SimTime);
+        }
     }
     Quad.step(OmegaCmd, Dt);
     SimTime += Dt;
@@ -193,10 +238,10 @@ void ADroneActor::StepSimulation(double Dt)
     {
         const fc::Vec3 E = Quad.s.att.toEuler();
         const fc::QuadState& S = Quad.s;
-        FlightLog.Add(FString::Printf(TEXT("%.3f,%.3f,%.3f,%.3f,%.3f,%.3f,%.3f,%.2f,%.2f,%.2f,%.0f,%.0f,%.0f,%.0f,%d"),
+        FlightLog.Add(FString::Printf(TEXT("%.3f,%.3f,%.3f,%.3f,%.3f,%.3f,%.3f,%.2f,%.2f,%.2f,%.0f,%.0f,%.0f,%.0f,%d,%d"),
             SimTime, S.pos.x, S.pos.y, S.pos.z, S.vel.x, S.vel.y, S.vel.z,
             E.x / fc::kDeg, E.y / fc::kDeg, E.z / fc::kDeg,
-            S.omega[0], S.omega[1], S.omega[2], S.omega[3], static_cast<int32>(Ctrl.mode)));
+            S.omega[0], S.omega[1], S.omega[2], S.omega[3], static_cast<int32>(Ctrl.mode), static_cast<int32>(Safety.action)));
     }
 }
 
@@ -255,6 +300,13 @@ void ADroneActor::UpdateHUD()
         const bool bHold = Ctrl.mode == fc::FlightMode::Position;
         HoverText->SetText(FText::FromString(bHold ? TEXT("모드: 위치 고정") : TEXT("모드: 자세 (고도 유지)")));
     }
+    // Optional TextBlock: shows the pre-flight result until the monitor triggers, then the action and reason.
+    if (UTextBlock* SafetyText = Cast<UTextBlock>(HUDWidget->GetWidgetFromName(TEXT("Text_Safety"))))
+    {
+        const FString Line = Safety.action == fc::SafetyAction::None ? PreflightResult
+            : FString::Printf(TEXT("안전: %s (%s)"), ANSI_TO_TCHAR(fc::actionName(Safety.action)), ANSI_TO_TCHAR(Safety.reason));
+        SafetyText->SetText(FText::FromString(Line));
+    }
 }
 
 void ADroneActor::SetupPlayerInputComponent(UInputComponent* PlayerInputComponent)
@@ -286,6 +338,10 @@ void ADroneActor::HandleYaw(const FInputActionValue& Value)      { Pilot.yaw = -
 // Hover key toggles position hold (FlightCore Position mode) <-> manual attitude flight.
 void ADroneActor::HandleHover(const FInputActionValue& Value)
 {
+    if (Safety.action != fc::SafetyAction::None)
+    {
+        return;   // the monitor owns the mode once it has triggered
+    }
     const bool bToHold = Ctrl.mode == fc::FlightMode::Angle;
     Ctrl.setMode(bToHold ? fc::FlightMode::Position : fc::FlightMode::Angle, Quad.s);
 }
