@@ -26,4 +26,4 @@ The v3 UE changes were written on a PC without UE and have never been compiled. 
 - New behavior needs a check in sim_main with pass criteria written before running it. Report failures honestly
   in the README dev log; never loosen a criterion silently.
 - It is simulation with typical (not identified) parameters: never overclaim in docs.
-- Public repo. Ask the user before committing or pushing.
+- Public repo. No PRs or feature branches: commit and push straight to `main` once checks pass.
