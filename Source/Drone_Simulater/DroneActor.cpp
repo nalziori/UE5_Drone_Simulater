@@ -97,6 +97,10 @@ ADroneActor::ADroneActor()
     FPVCamera = CreateDefaultSubobject<UCameraComponent>(TEXT("FPVCamera"));
     FPVCamera->SetupAttachment(PhysicsRoot);
     FPVCamera->SetRelativeLocation(FVector(20.f, 0.f, 0.f));
+    // UCameraComponent defaults bAutoActivate to true, which would re-activate this on
+    // registration regardless of the SetActive(false) below; must be turned off explicitly
+    // so only one camera is active at BeginPlay.
+    FPVCamera->SetAutoActivate(false);
     FPVCamera->SetActive(false);
 }
 
